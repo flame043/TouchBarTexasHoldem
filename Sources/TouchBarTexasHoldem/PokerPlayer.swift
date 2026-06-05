@@ -16,7 +16,8 @@ final class PokerPlayer {
     let name: String
     let type: PlayerType
     var chips: Int
-    var currentBet: Int = 0
+    var currentBet: Int = 0          // Bet on the current street only
+    var totalCommitted: Int = 0      // Total chips committed in this hand, used for side pots
     var hand: [Card] = []
     var status: PlayerStatus = .active
 
@@ -40,6 +41,7 @@ final class PokerPlayer {
 
     func resetForNewHand() {
         currentBet = 0
+        totalCommitted = 0
         hand = []
         if chips > 0 {
             status = .active
@@ -51,6 +53,7 @@ final class PokerPlayer {
     func resetForNewGame() {
         chips = 1000
         currentBet = 0
+        totalCommitted = 0
         hand = []
         status = .active
     }
