@@ -79,7 +79,7 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
         case 53: // Esc
             if engine.phase == .gameOver {
                 NSApplication.shared.terminate(nil)
-            } else {
+            } else if engine.isHumanTurn {
                 engine.performHumanAction(.fold)
             }
         default:
@@ -91,8 +91,9 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
         engine.availableActionsForHuman()
     }
 
-    private var selectedAction: ActionOption {
+    private var selectedAction: ActionOption? {
         let actions = currentActions
+        guard !actions.isEmpty else { return nil }
         if selectedActionIndex >= actions.count { selectedActionIndex = 0 }
         return actions[selectedActionIndex]
     }
@@ -100,6 +101,7 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
     private func moveSelectionLeft() {
         guard engine.phase != .gameOver else { return }
         let count = currentActions.count
+        guard count > 0 else { return }
         selectedActionIndex = (selectedActionIndex - 1 + count) % count
         updateTouchBarActionText()
     }
@@ -107,6 +109,7 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
     private func moveSelectionRight() {
         guard engine.phase != .gameOver else { return }
         let count = currentActions.count
+        guard count > 0 else { return }
         selectedActionIndex = (selectedActionIndex + 1) % count
         updateTouchBarActionText()
     }
@@ -128,8 +131,8 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
     }
 
     private func confirmSelectedAction() {
-        guard engine.phase != .gameOver else { return }
-        switch selectedAction {
+        guard engine.phase != .gameOver, let action = selectedAction else { return }
+        switch action {
         case .check:
             engine.performHumanAction(.check)
         case .call:
@@ -149,17 +152,25 @@ final class ViewController: NSViewController, NSTouchBarDelegate, GameEngineDele
         if engine.phase == .gameOver {
             return latestTouchBarMessage
         }
+        if engine.phase == .showdown {
+            return latestTouchBarMessage + " | R: Next Hand"
+        }
+
+        let actions = currentActions
+        guard !actions.isEmpty else {
+            return latestTouchBarMessage
+        }
 
         let callAmount = engine.callAmountForHuman
-        let actions = currentActions
         let actionText = actions.enumerated().map { index, action in
             var title = action.title
             if action == .call { title = "Call \(callAmount)" }
-            if action == .raise { title = "Raise \(raiseAmount)" }
+            if action == .raise { title = "Raise +\(raiseAmount)" }
             return index == selectedActionIndex ? "> \(title) <" : title
         }.joined(separator: "   ")
 
-        return "\(engine.boardText) | You: \(engine.human.handText) | Pot: \(engine.pot) | \(actionText)"
+        let needText = callAmount > 0 ? "Need: \(callAmount) | " : ""
+        return "\(engine.boardText) | You: \(engine.human.handText) | \(needText)Pot: \(engine.pot) | \(actionText)"
     }
 
     private func updateTouchBarActionText() {
