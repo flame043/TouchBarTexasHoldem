@@ -207,6 +207,11 @@ final class GameEngine {
                 return
             }
 
+            if shouldRunOutBoardToShowdown() {
+                runOutBoardAndShowdown()
+                return
+            }
+
             if bettingRoundIsComplete() {
                 finishBettingRound()
                 return
@@ -216,6 +221,7 @@ final class GameEngine {
                 finishBettingRound()
                 return
             }
+
             currentPlayerIndex = index
 
             let player = players[index]
@@ -230,6 +236,41 @@ final class GameEngine {
             currentPlayerIndex = nextActionIndex(after: index) ?? 0
             delegate?.gameEngineDidUpdate(self)
         }
+    }
+
+    private func shouldRunOutBoardToShowdown() -> Bool {
+        let playersInHand = players.filter { $0.isInHand }
+        let playersWhoCanStillBet = playersInHand.filter { $0.canAct }
+
+        guard playersInHand.count >= 2 else { return false }
+        guard playersWhoCanStillBet.count <= 1 else { return false }
+
+        // Important:
+        // If one player still needs to call an all-in or raise, they must still act.
+        // Only run out the board when the remaining active player has already matched the current highest bet.
+        return playersWhoCanStillBet.allSatisfy { $0.currentBet >= highestBet }
+    }
+
+    private func runOutBoardAndShowdown() {
+        actionLog.append("No more betting action possible. Running out the board.")
+
+        switch phase {
+        case .preFlop:
+            dealFlop()
+            dealTurn()
+            dealRiver()
+        case .flop:
+            dealTurn()
+            dealRiver()
+        case .turn:
+            dealRiver()
+        case .river:
+            break
+        case .showdown, .gameOver:
+            return
+        }
+
+        showdown()
     }
 
     private func bettingRoundIsComplete() -> Bool {
@@ -281,15 +322,25 @@ final class GameEngine {
         }
 
         if callAmount == 0 {
-            if player.chips <= lastRaiseAmount { return random < 0.15 ? .allIn : .check }
-            if strength > 0.78 && random < 0.50 { return .raise(preferredAIRaise(for: player, callAmount: 0)) }
-            if random < bluffChance { return .raise(preferredAIRaise(for: player, callAmount: 0)) }
-            if random > 0.985 { return .allIn }
+            if player.chips <= lastRaiseAmount {
+                return random < 0.15 ? .allIn : .check
+            }
+            if strength > 0.78 && random < 0.50 {
+                return .raise(preferredAIRaise(for: player, callAmount: 0))
+            }
+            if random < bluffChance {
+                return .raise(preferredAIRaise(for: player, callAmount: 0))
+            }
+            if random > 0.985 {
+                return .allIn
+            }
             return .check
         }
 
         if callAmount >= player.chips {
-            if strength > 0.70 || random < bluffChance { return .call }
+            if strength > 0.70 || random < bluffChance {
+                return .call
+            }
             return .fold
         }
 
@@ -321,10 +372,19 @@ final class GameEngine {
         let ranks = player.hand.map { $0.rank.rawValue }.sorted(by: >)
         guard ranks.count == 2 else { return 0.3 }
         let suited = player.hand[0].suit == player.hand[1].suit
-        if ranks[0] == ranks[1] { return ranks[0] >= 10 ? 0.88 : 0.66 }
-        if ranks[0] >= 14 && ranks[1] >= 10 { return suited ? 0.78 : 0.72 }
-        if ranks[0] >= 12 && ranks[1] >= 10 { return suited ? 0.66 : 0.58 }
-        if abs(ranks[0] - ranks[1]) == 1 { return suited ? 0.52 : 0.44 }
+
+        if ranks[0] == ranks[1] {
+            return ranks[0] >= 10 ? 0.88 : 0.66
+        }
+        if ranks[0] >= 14 && ranks[1] >= 10 {
+            return suited ? 0.78 : 0.72
+        }
+        if ranks[0] >= 12 && ranks[1] >= 10 {
+            return suited ? 0.66 : 0.58
+        }
+        if abs(ranks[0] - ranks[1]) == 1 {
+            return suited ? 0.52 : 0.44
+        }
         return min(0.60, Double(ranks[0] + ranks[1]) / 32.0)
     }
 
@@ -425,9 +485,11 @@ final class GameEngine {
         player.currentBet += paid
         player.totalCommitted += paid
         pot += paid
+
         if player.chips == 0 && player.status == .active {
             player.status = .allIn
         }
+
         return paid
     }
 
@@ -443,18 +505,22 @@ final class GameEngine {
             phase = .flop
             notifyTouchBar("\(boardText) | Flop dealt")
             beginBettingRound(startingAt: postFlopFirstActionIndex() ?? 0)
+
         case .flop:
             dealTurn()
             phase = .turn
             notifyTouchBar("\(boardText) | Turn dealt")
             beginBettingRound(startingAt: postFlopFirstActionIndex() ?? 0)
+
         case .turn:
             dealRiver()
             phase = .river
             notifyTouchBar("\(boardText) | River dealt")
             beginBettingRound(startingAt: postFlopFirstActionIndex() ?? 0)
+
         case .river:
             showdown()
+
         case .showdown, .gameOver:
             return
         }
@@ -463,20 +529,26 @@ final class GameEngine {
     private func dealFlop() {
         deck.burnCard()
         for _ in 0..<3 {
-            if let card = deck.draw() { communityCards.append(card) }
+            if let card = deck.draw() {
+                communityCards.append(card)
+            }
         }
         actionLog.append("Flop: \(communityCards.map { $0.displayText }.joined(separator: " ")).")
     }
 
     private func dealTurn() {
         deck.burnCard()
-        if let card = deck.draw() { communityCards.append(card) }
+        if let card = deck.draw() {
+            communityCards.append(card)
+        }
         actionLog.append("Turn: \(communityCards.last?.displayText ?? "--").")
     }
 
     private func dealRiver() {
         deck.burnCard()
-        if let card = deck.draw() { communityCards.append(card) }
+        if let card = deck.draw() {
+            communityCards.append(card)
+        }
         actionLog.append("River: \(communityCards.last?.displayText ?? "--").")
     }
 
@@ -538,9 +610,11 @@ final class GameEngine {
 
             let share = sidePot / winners.count
             let remainder = sidePot % winners.count
+
             for (offset, winner) in winners.enumerated() {
                 winner.chips += share + (offset < remainder ? 1 : 0)
             }
+
             totalAwarded += sidePot
             actionLog.append("Pot \(sidePot) won by \(winners.map { $0.name }.joined(separator: ", ")).")
         }
@@ -568,6 +642,7 @@ final class GameEngine {
             delegate?.gameEngineDidUpdate(self)
             return true
         }
+
         return false
     }
 
@@ -576,15 +651,25 @@ final class GameEngine {
     }
 
     private func roleName(_ index: Int?) -> String {
-        guard let index = index, players.indices.contains(index) else { return "--" }
+        guard let index = index, players.indices.contains(index) else {
+            return "--"
+        }
         return players[index].name
     }
 
     private func roleText(for index: Int) -> String {
         var roles: [String] = []
-        if index == dealerIndex { roles.append("D") }
-        if index == smallBlindIndex { roles.append("SB") }
-        if index == bigBlindIndex { roles.append("BB") }
+
+        if index == dealerIndex {
+            roles.append("D")
+        }
+        if index == smallBlindIndex {
+            roles.append("SB")
+        }
+        if index == bigBlindIndex {
+            roles.append("BB")
+        }
+
         return roles.isEmpty ? "" : " [\(roles.joined(separator: "/"))]"
     }
 
@@ -600,11 +685,16 @@ final class GameEngine {
         let playersText = players.indices.map { index -> String in
             let player = players[index]
             let status: String
+
             switch player.status {
-            case .active: status = "Active"
-            case .folded: status = "Folded"
-            case .allIn: status = "All-in"
-            case .busted: status = "Busted"
+            case .active:
+                status = "Active"
+            case .folded:
+                status = "Folded"
+            case .allIn:
+                status = "All-in"
+            case .busted:
+                status = "Busted"
             }
 
             let hand = player.type == .human || phase == .showdown || phase == .gameOver ? player.handText : "?? ??"
