@@ -1,0 +1,70 @@
+workflows:
+  macos-app-build:
+    name: Build TouchBarTexasHoldem macOS App
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+
+    environment:
+      xcode: latest
+
+    scripts:
+      - name: Show versions
+        script: |
+          xcodebuild -version
+          swift --version
+          uname -m
+
+      - name: Build release binary
+        script: |
+          swift build -c release --arch x86_64
+
+      - name: Create app bundle
+        script: |
+          APP_NAME="TouchBarTexasHoldem"
+          BUNDLE_DIR="dist/${APP_NAME}.app"
+          mkdir -p "${BUNDLE_DIR}/Contents/MacOS"
+          mkdir -p "${BUNDLE_DIR}/Contents/Resources"
+
+          cp ".build/x86_64-apple-macosx/release/${APP_NAME}" "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
+          chmod +x "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
+
+          cat > "${BUNDLE_DIR}/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleExecutable</key>
+              <string>TouchBarTexasHoldem</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.local.touchbartexasholdem</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>TouchBarTexasHoldem</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Ad-hoc sign app bundle
+        script: |
+          codesign --force --deep --sign - "dist/TouchBarTexasHoldem.app"
+
+      - name: Zip app bundle
+        script: |
+          cd dist
+          ditto -c -k --keepParent TouchBarTexasHoldem.app TouchBarTexasHoldem-macOS-x86_64.zip
+
+    artifacts:
+      - dist/TouchBarTexasHoldem-macOS-x86_64.zip
