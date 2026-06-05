@@ -1,6 +1,5 @@
 import Cocoa
 
-@main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
 
@@ -16,9 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
 
-        newWindow.center()
         newWindow.title = "TouchBar Texas Holdem"
+        newWindow.center()
         newWindow.contentViewController = viewController
+        newWindow.isReleasedWhenClosed = false
         newWindow.makeKeyAndOrderFront(nil)
 
         self.window = newWindow
